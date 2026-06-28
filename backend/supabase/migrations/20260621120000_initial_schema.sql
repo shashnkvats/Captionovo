@@ -1,0 +1,2 @@
+-- See Supabase migration: initial_schema
+-- Applied via MCP on 2026-06-21

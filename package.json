@@ -1,0 +1,24 @@
+{
+  "name": "captionovo",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.97.0",
+    "docx": "^9.7.1"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=frontend",
+    "start": "npm run start --workspace=frontend",
+    "lint": "npm run lint --workspace=frontend",
+    "dev:fe": "npm run dev --workspace=frontend",
+    "dev:be": "npm run dev --workspace=backend",
+    "worker": "npm run worker --workspace=backend",
+    "configure:google-oauth": "node scripts/configure-google-oauth.mjs",
+    "enable:google-oauth": "node scripts/enable-google-oauth.mjs"
+  }
+}
