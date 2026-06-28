@@ -13,7 +13,7 @@ Cloud web app for transcription, subtitles, and creator repurposing. MVP focus: 
 ```
 Captionovo/
 ├── frontend/          # Next.js 16 App Router (UI + Supabase Auth client)
-├── backend/           # Hono API (port 4000) + Supabase admin client
+├── backend/           # Python 3.13 + FastAPI API (port 4000) + Supabase admin client
 ├── scripts/           # OAuth setup helpers
 ├── .env               # Google OAuth creds (root, gitignored)
 └── package.json       # npm workspaces root
@@ -71,9 +71,9 @@ Stack: Next.js 16, TypeScript, Tailwind CSS 4, Lucide icons.
 
 Local migration references: `backend/supabase/migrations/`
 
-### 3. Backend API (Hono + Supabase)
+### 3. Backend API (FastAPI + Supabase)
 
-Runs at `http://localhost:4000`. All routes except `/health` and `/billing/webhook` require `Authorization: Bearer <supabase_access_token>`.
+Runs at `http://localhost:4000`. Python 3.13, FastAPI, supabase-py. All routes except `/health` and `/billing/webhook` require `Authorization: Bearer <supabase_access_token>`.
 
 | Method | Route | Description | Status |
 |--------|-------|-------------|--------|
@@ -83,7 +83,7 @@ Runs at `http://localhost:4000`. All routes except `/health` and `/billing/webho
 | GET/PATCH/DELETE | `/projects/:id` | Project CRUD | Live |
 | POST | `/projects/:id/upload-url` | Signed storage upload URL | Live |
 | POST | `/projects/:id/confirm-upload` | Verify upload, probe, reserve credits | Live |
-| POST | `/projects/:id/process` | Idempotent pipeline enqueue | Live (stub provider) |
+| POST | `/projects/:id/process` | Idempotent pipeline enqueue | Live (Deepgram when `TRANSCRIPTION_PROVIDER=deepgram`) |
 | GET | `/projects/:id/processing-events` | Processing timeline | Live |
 | GET | `/projects/:id/transcript` | Transcript segments + speakers | Live |
 | PATCH | `/projects/:id/transcript/segments/:segmentId` | Edit transcript segment | Live |
@@ -96,7 +96,7 @@ Runs at `http://localhost:4000`. All routes except `/health` and `/billing/webho
 
 **Architecture scaffold (code):** pipeline orchestrator, job queue, provider interfaces, credits/billing services, worker entry (`npm run worker`).
 
-Key files: `backend/src/index.ts`, `backend/src/routes/`, `backend/src/pipeline/`, `backend/src/jobs/`, `backend/src/services/`
+Key files: `backend/src/captionovo/main.py`, `backend/src/captionovo/routes/`, `backend/src/captionovo/pipeline/`, `backend/src/captionovo/jobs/`, `backend/src/captionovo/services/`
 
 Docs: `backend/ARCHITECTURE.md`, `backend/docs/transcriber-and-billing-architecture.docx`, `captionovo_end_to_end_architecture_improvements.docx`
 
@@ -110,15 +110,17 @@ Docs: `backend/ARCHITECTURE.md`, `backend/docs/transcriber-and-billing-architect
 - **API client** (`frontend/src/lib/api/`) forwards session token to backend
 - All app pages fetch live data from backend (mock data replaced)
 
-### 5. Upload flow (Sprint 1)
+### 5. Upload flow (Sprint 1) + real STT (Sprint 2)
 
 1. User selects file on `/upload`
 2. `POST /projects` creates project in **draft** (no credit check)
 3. `POST /projects/:id/upload-url` → signed upload to `…/source/{file}`
 4. Frontend uploads to Supabase Storage
-5. `POST /projects/:id/confirm-upload` → verify file, probe duration, **reserve credits**
-6. `POST /projects/:id/process` → idempotent job enqueue
+5. `POST /projects/:id/confirm-upload` → verify file, **FFmpeg duration probe**, reserve credits
+6. `POST /projects/:id/process` → extract audio (FFmpeg) → Deepgram Nova-3 → persist transcript
 7. Redirect to `/projects/:id/processing` (polls events)
+
+**Sprint 2 requirements:** FFmpeg on PATH (`ffmpeg`, `ffprobe`), `DEEPGRAM_API_KEY`, `TRANSCRIPTION_PROVIDER=deepgram` in `backend/.env`.
 
 ---
 
@@ -142,6 +144,10 @@ SUPABASE_URL=https://zzxsxccapuwefkvqixad.supabase.co
 SUPABASE_ANON_KEY=<anon key>
 SUPABASE_SERVICE_ROLE_KEY=<service_role key — never expose to frontend>
 CORS_ORIGIN=http://localhost:3000
+TRANSCRIPTION_PROVIDER=deepgram
+DEEPGRAM_API_KEY=<from Deepgram dashboard>
+# FFMPEG_PATH=ffmpeg
+# FFPROBE_PATH=ffprobe
 ```
 
 Keys: [Supabase Dashboard → Settings → API](https://supabase.com/dashboard/project/zzxsxccapuwefkvqixad/settings/api)
@@ -195,8 +201,8 @@ Setup scripts (from repo root):
 ```bash
 npm install
 npm run dev          # frontend → :3000
-npm run dev:be       # backend  → :4000
-npm run worker       # optional job poller (backend workspace)
+npm run dev:be       # backend  → :4000 (uvicorn + FastAPI)
+npm run worker       # optional job poller (Python)
 npm run build        # frontend production build
 ```
 
@@ -206,11 +212,12 @@ Both servers must run for full functionality (frontend calls backend API).
 
 ## Implementation roadmap
 
-**Last updated:** 2026-06-22  
-**Current focus:** Phase 2 (P0.2 real transcription — Sprint 2)  
+**Last updated:** 2026-06-28  
+**Current focus:** Phase 2 benchmark + Phase 3 prep (Sprint 2 wrap-up)  
+**Sprint status:** Sprint 1 complete · Sprint 2 in progress (core STT shipped)  
 **Source of truth for design:** `captionovo_end_to_end_architecture_improvements.docx`
 
-> **Agent instruction:** As you complete work, update this section — check off tasks, change status labels, bump **Last updated**, and set **Current focus**. Do not remove completed items; mark them `[x]` so progress is visible.
+> **Agent instruction:** After **every** code change that ships or alters behavior, update docs in the same task — do not defer. Check off roadmap tasks (`[x]` / `[~]`), bump **Last updated**, set **Current focus** and **Sprint status**, and sync the API table in **What has been built**. See `.cursor/rules/update-docs-after-changes.mdc`. Do not remove completed items.
 
 ### Progress legend
 
@@ -223,7 +230,7 @@ Both servers must run for full functionality (frontend calls backend API).
 ### Guiding principles
 
 1. Complete **Phase 1 (P0.1)** before real STT — billing and job flow must be correct first.
-2. One migration batch per phase; apply via Supabase MCP; regenerate `backend/src/types/database.ts`.
+2. One migration batch per phase; apply via Supabase MCP.
 3. Keep stub provider until Phase 2 validates the new upload/billing flow end-to-end.
 4. Persist transcript immediately after STT; later stages are retryable and partially completable.
 
@@ -243,9 +250,10 @@ Both servers must run for full functionality (frontend calls backend API).
 
 ---
 
-### Phase 1 — P0.1 Backend safety (Sprint 1)
+### Phase 1 — P0.1 Backend safety (Sprint 1) ✅
 
-**Goal:** Safe upload → reserve credits → idempotent process → visible progress.
+**Goal:** Safe upload → reserve credits → idempotent process → visible progress.  
+**Status:** Complete (2026-06-28).
 
 #### Schema
 
@@ -292,10 +300,12 @@ Both servers must run for full functionality (frontend calls backend API).
 
 **Goal:** Real audio in → real transcript out (English, Hindi, Hinglish).
 
-- [ ] `FfmpegMediaProcessor` — extract audio, probe duration, write `project_files`
-- [ ] `DeepgramTranscriptionProvider` (Nova-3, batch mode)
-- [ ] Env: `TRANSCRIPTION_PROVIDER=deepgram`, `DEEPGRAM_API_KEY`
-- [ ] Normalize provider output → internal format only (never leak to DB/frontend)
+- [x] `FfmpegMediaProcessor` — extract audio, probe duration, write `project_files` (`providers/ffmpeg.py`)
+- [x] `DeepgramTranscriptionProvider` (Nova-3, batch mode) (`providers/deepgram.py`)
+- [x] Env: `TRANSCRIPTION_PROVIDER=deepgram`, `DEEPGRAM_API_KEY`, `FFMPEG_PATH` / `FFPROBE_PATH`
+- [x] Normalize provider output → internal format only (`normalize_deepgram_response`)
+- [x] Real duration probe at confirm-upload via FFmpeg (`MediaProbeService.probe_bytes`)
+- [x] Extracted audio persisted to Storage + `project_files.extracted_audio`
 - [ ] OpenAI fallback provider (optional, same interface)
 - [ ] Benchmark: 10 EN + 10 HI + 10 Hinglish samples (WER, timing, cost, failure rate)
 
@@ -364,26 +374,26 @@ Both servers must run for full functionality (frontend calls backend API).
 ### Dependency order
 
 ```
-Phase 0 (migrations)
-  → Phase 1 (P0.1 safety)     ← CURRENT
-    → Phase 2 (Deepgram + FFmpeg)
+Phase 0 (migrations)           ✅
+  → Phase 1 (P0.1 safety)      ✅ Sprint 1 shipped
+    → Phase 2 (Deepgram + FFmpeg)  ← CURRENT (Sprint 2 — core STT shipped)
       → Phase 3 (subtitles + exports)
-    → Phase 4 (Stripe)          ← can parallel after Phase 1
+    → Phase 4 (Stripe)             ← can parallel after Phase 1
       → Phase 6 (production)
-    → Phase 5 (creator features) ← after Phase 3
+    → Phase 5 (creator features)     ← after Phase 3
 ```
 
 ---
 
 ### Sprint schedule (reference)
 
-| Sprint | Focus | Ship |
-|--------|-------|------|
-| Sprint 1 | Phase 0 + Phase 1 | Safe upload, reservations, events |
-| Sprint 2 | Phase 2 | Real Deepgram transcription |
-| Sprint 3 | Phase 3 | Subtitles + file exports |
-| Sprint 4 | Phase 4 + start P1 | Stripe + editor autosave |
-| Sprint 5 | P1 + Phase 6 | MP4 burn-in, deploy |
+| Sprint | Focus | Ship | Status |
+|--------|-------|------|--------|
+| Sprint 1 | Phase 0 + Phase 1 | Safe upload, reservations, events | ✅ Done |
+| Sprint 2 | Phase 2 | Real Deepgram transcription | In progress (core done) |
+| Sprint 3 | Phase 3 | Subtitles + file exports | Planned |
+| Sprint 4 | Phase 4 + start P1 | Stripe + editor autosave | Planned |
+| Sprint 5 | P1 + Phase 6 | MP4 burn-in, deploy | Planned |
 
 ---
 
@@ -410,8 +420,8 @@ Browser → Next.js (frontend)
                 └─ Supabase (Postgres + Storage + service role for uploads)
 
 Processing:
-  POST /projects/:id/process → Job Queue → Pipeline Orchestrator → Providers → DB/Storage
-  Optional: npm run worker (dedicated job poller)
+ POST /projects/:id/process → Job Queue → Pipeline Orchestrator → Providers → DB/Storage
+ Optional: npm run worker (Python job poller)
 ```
 
 - Frontend never uses `SUPABASE_SERVICE_ROLE_KEY`
@@ -423,8 +433,8 @@ Processing:
 ## Conventions
 
 - Match existing code style in each workspace
-- Types: `frontend/src/lib/types.ts` (app), `backend/src/types/database.ts` (Supabase)
-- API responses use camelCase mappers in `backend/src/lib/mappers.ts`
+- Types: `frontend/src/lib/types.ts` (app)
+- API responses use camelCase mappers in `backend/src/captionovo/mappers.py`
 - Minimize scope — focused diffs, no over-engineering
 - Do not commit secrets (`.env`, service role key, Google secret)
-- **Update the Implementation roadmap section above when shipping features**
+- **Update docs in the same task as code changes** — roadmap, API table, env examples, `ARCHITECTURE.md` when needed (see `.cursor/rules/update-docs-after-changes.mdc`)

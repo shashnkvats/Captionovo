@@ -1,6 +1,6 @@
 # Captionovo Backend
 
-Hono API server backed by Supabase (Postgres, Auth, Storage).
+Python 3.13 + FastAPI API server backed by Supabase (Postgres, Auth, Storage).
 
 ## Setup
 
@@ -18,13 +18,26 @@ cp .env.example .env
 | `SUPABASE_ANON_KEY` | anon / publishable key |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (keep secret) |
 
-3. Run the API:
+3. Install dependencies (requires Python 3.13):
 
 ```bash
-npm run dev
+cd backend
+uv sync
+```
+
+4. Run the API (from repo root):
+
+```bash
+npm run dev:be
 ```
 
 API runs at `http://localhost:4000`.
+
+Optional job poller:
+
+```bash
+npm run worker
+```
 
 ## Supabase project
 
@@ -37,7 +50,7 @@ Migrations are stored in `supabase/migrations/` and applied via Supabase MCP.
 
 ## API routes
 
-All routes except `/health` require `Authorization: Bearer <supabase_access_token>`.
+All routes except `/health` and `/billing/webhook` require `Authorization: Bearer <supabase_access_token>`.
 
 | Method | Route | Description |
 |--------|-------|-------------|
@@ -50,21 +63,8 @@ All routes except `/health` require `Authorization: Bearer <supabase_access_toke
 | PATCH | `/projects/:id` | Update project metadata |
 | DELETE | `/projects/:id` | Soft-delete project |
 | POST | `/projects/:id/upload-url` | Signed upload URL for source media |
-| POST | `/projects/:id/process` | Queue processing (stub) |
+| POST | `/projects/:id/confirm-upload` | Verify upload, probe, reserve credits |
+| POST | `/projects/:id/process` | Queue processing |
 | GET | `/billing/transactions` | Credit usage history |
 
-## Database schema
-
-- `profiles` — user settings, credits, defaults
-- `projects` — upload jobs and metadata
-- `speakers`, `transcript_segments`, `subtitle_segments`
-- `repurpose_outputs`, `exports`
-- `credit_transactions`
-
-Storage buckets: `uploads`, `exports`
-
-## Next steps
-
-- Connect transcription worker to `/process`
-- Deduct credits on completion
-- Wire frontend auth to Supabase and call this API
+See `ARCHITECTURE.md` for pipeline and billing design.

@@ -10,7 +10,7 @@ flowchart TB
     FE[Next.js Frontend]
   end
 
-  subgraph api [API Layer - Hono :4000]
+  subgraph api [API Layer - FastAPI :4000]
     Routes[Routes]
     Auth[Auth Middleware]
   end
@@ -57,15 +57,15 @@ flowchart TB
 ## Directory layout
 
 ```
-backend/src/
+backend/src/captionovo/
 ├── domain/           # Shared types (processing, billing)
 ├── routes/           # HTTP handlers (thin — delegate to services)
 ├── jobs/             # Job queue + worker runner
 ├── pipeline/         # Orchestrator + stage implementations
 ├── providers/        # Swappable STT / diarization / FFmpeg adapters
 ├── services/         # Credits ledger, billing (Stripe)
-├── worker/           # Standalone worker entry point
-└── lib/              # Auth, env, Supabase, mappers
+├── worker.py         # Standalone worker entry point
+└── (lib modules)     # auth, config, supabase, mappers, storage_paths
 ```
 
 ## Processing pipeline
@@ -99,11 +99,11 @@ Each stage:
 
 | Interface | Responsibility | Current impl |
 |-----------|----------------|--------------|
-| `TranscriptionProvider` | Speech-to-text | `providers/stub` |
-| `DiarizationProvider` | Speaker assignment | `providers/stub` |
-| `MediaProcessor` | FFmpeg extract / burn-in | `providers/stub` |
+| `TranscriptionProvider` | Speech-to-text | `providers/deepgram` or `providers/stub` |
+| `DiarizationProvider` | Speaker assignment | `PassthroughDiarizationProvider` (Deepgram) or `providers/stub` |
+| `MediaProcessor` | FFmpeg extract / burn-in | `providers/ffmpeg` or `providers/stub` |
 
-Switch provider via `TRANSCRIPTION_PROVIDER` env (future: `deepgram`, `assemblyai`).
+Switch provider via `TRANSCRIPTION_PROVIDER` env (`stub` | `deepgram`). Requires `DEEPGRAM_API_KEY` and FFmpeg on PATH when using `deepgram`.
 
 ### Job queue
 
@@ -167,7 +167,7 @@ Export generation (`job_type: export`) is stubbed — same queue pattern as pipe
 
 ```
 ┌─────────────────┐     ┌─────────────────┐
-│  API (Hono)     │     │  Worker         │
+│  API (FastAPI)  │     │  Worker         │
 │  npm run dev:be │     │  npm run worker │
 └────────┬────────┘     └────────┬────────┘
          │                       │
@@ -189,9 +189,12 @@ For production, run API and Worker as separate processes/containers. Both need `
 - [ ] Apply DB migration via Supabase MCP
 
 ### Phase 2 — Real transcription
-- [ ] Deepgram or AssemblyAI provider (Hindi/Hinglish)
-- [ ] FFmpeg media processor (audio extract, duration probe)
-- [ ] Persist real duration + word-level timestamps
+- [x] Deepgram Nova-3 provider (`providers/deepgram.py`) — Hindi/Hinglish via `multi` / `hi` / `en`
+- [x] FFmpeg media processor (`providers/ffmpeg.py`) — audio extract, duration probe
+- [x] Normalize Deepgram JSON → `TranscriptionResult` only (never leak to DB/frontend)
+- [x] Confirm-upload uses ffprobe for credit reservation
+- [ ] Word-level timestamps in domain model (optional)
+- [ ] Benchmark suite (EN / HI / Hinglish)
 
 ### Phase 3 — Subtitles & burn-in
 - [ ] Subtitle chunking / line breaking

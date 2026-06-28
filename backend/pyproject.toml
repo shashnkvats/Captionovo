@@ -1,0 +1,34 @@
+[project]
+name = "captionovo-backend"
+version = "0.1.0"
+description = "Captionovo API — transcription, subtitles, and creator repurposing"
+requires-python = ">=3.13"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.32.0",
+  "pydantic>=2.10.0",
+  "pydantic-settings>=2.6.0",
+  "python-dotenv>=1.0.0",
+  "supabase>=2.11.0",
+  "httpx>=0.28.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.8.0",
+]
+
+[project.scripts]
+captionovo-api = "captionovo.main:run"
+captionovo-worker = "captionovo.worker:run"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/captionovo"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"

@@ -1,0 +1,30 @@
+---
+description: Update AGENTS.md and related docs whenever shipping code changes
+alwaysApply: true
+---
+
+# Update docs after every change
+
+When you ship or materially change behavior, update documentation in the **same task** — not as a follow-up.
+
+## Required: AGENTS.md
+
+1. **Implementation roadmap** — check off `[x]` / mark `[~]`; never delete completed items
+2. **Last updated** — set to today's date
+3. **Current focus** — next sprint/phase the team should work on
+4. **What has been built** — API status table, upload flow, or UI notes if routes/behavior changed
+5. **Sprint schedule** — mark completed sprints; note active sprint
+
+## Also update when relevant
+
+| Change | Doc |
+|--------|-----|
+| Pipeline, billing, providers | `backend/ARCHITECTURE.md` |
+| New env vars | `backend/.env.example`, env section in `AGENTS.md` |
+| Major architecture shift | Regenerate architecture DOCX (Phase 0 item) |
+
+## Do not skip
+
+- Stub → live route: change status from Stub to Live in the API table
+- New migration: note in roadmap + local `backend/supabase/migrations/`
+- Phase exit criteria met: verify checklist items before moving **Current focus**
